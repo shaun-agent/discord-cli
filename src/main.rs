@@ -158,7 +158,9 @@ enum PermissionAction {
     Set {
         channel_id: String,
         #[arg(long)]
-        role: String,
+        role: Option<String>,
+        #[arg(long)]
+        member: Option<String>,
         #[arg(long)]
         allow: Option<String>,
         #[arg(long)]
@@ -168,7 +170,9 @@ enum PermissionAction {
     Remove {
         channel_id: String,
         #[arg(long)]
-        role: String,
+        role: Option<String>,
+        #[arg(long)]
+        member: Option<String>,
     },
 }
 
@@ -463,20 +467,27 @@ fn main() {
             },
         },
         Commands::Permissions { action } => match action {
-            PermissionAction::Set { channel_id, role, allow, deny } => {
+            PermissionAction::Set { channel_id, role, member, allow, deny } => {
+                let (target_id, ptype) = match (role, member) {
+                    (Some(r), None) => (r, 0),
+                    (None, Some(m)) => (m, 1),
+                    _ => { eprintln!("Specify exactly one of --role or --member"); process::exit(1); }
+                };
                 let allow_bits = allow.map(|a| parse_permissions(&a)).unwrap_or(0);
                 let deny_bits = deny.map(|d| parse_permissions(&d)).unwrap_or(0);
                 let body = serde_json::json!({
                     "allow": allow_bits.to_string(),
                     "deny": deny_bits.to_string(),
-                    "type": 0
+                    "type": ptype
                 });
-                dc.put(&format!("/channels/{}/permissions/{}", channel_id, role), &body);
-                println!("Set permissions on channel {} for role {}", channel_id, role);
+                dc.put(&format!("/channels/{}/permissions/{}", channel_id, target_id), &body);
+                let label = if ptype == 0 { "role" } else { "member" };
+                println!("Set permissions on channel {} for {} {}", channel_id, label, target_id);
             },
-            PermissionAction::Remove { channel_id, role } => {
-                dc.delete(&format!("/channels/{}/permissions/{}", channel_id, role));
-                println!("Removed permission overwrite for role {} on channel {}", role, channel_id);
+            PermissionAction::Remove { channel_id, role, member } => {
+                let target_id = role.or(member).unwrap_or_else(|| { eprintln!("Specify --role or --member"); process::exit(1); });
+                dc.delete(&format!("/channels/{}/permissions/{}", channel_id, target_id));
+                println!("Removed permission overwrite for {} on channel {}", target_id, channel_id);
             },
         },
     }
