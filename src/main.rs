@@ -9,6 +9,9 @@ const BASE_URL: &str = "https://discord.com/api/v10";
 #[derive(Parser)]
 #[command(name = "discord", about = "Discord server management CLI")]
 struct Cli {
+    /// Override guild ID (defaults to DISCORD_GUILD_ID env var)
+    #[arg(long, global = true)]
+    guild: Option<String>,
     #[command(subcommand)]
     command: Commands,
 }
@@ -182,14 +185,16 @@ struct Discord {
 }
 
 impl Discord {
-    fn new() -> Self {
+    fn new(guild_override: Option<String>) -> Self {
         let token = env::var("DISCORD_TOKEN").unwrap_or_else(|_| {
             eprintln!("Error: DISCORD_TOKEN not set");
             process::exit(1);
         });
-        let guild_id = env::var("DISCORD_GUILD_ID").unwrap_or_else(|_| {
-            eprintln!("Error: DISCORD_GUILD_ID not set");
-            process::exit(1);
+        let guild_id = guild_override.unwrap_or_else(|| {
+            env::var("DISCORD_GUILD_ID").unwrap_or_else(|_| {
+                eprintln!("Error: DISCORD_GUILD_ID not set (use --guild or env var)");
+                process::exit(1);
+            })
         });
         Self {
             client: Client::new(),
@@ -323,7 +328,7 @@ fn parse_permissions(s: &str) -> u64 {
 
 fn main() {
     let cli = Cli::parse();
-    let dc = Discord::new();
+    let dc = Discord::new(cli.guild);
 
     match cli.command {
         Commands::Auth { action } => match action {
