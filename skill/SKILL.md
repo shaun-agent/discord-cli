@@ -22,6 +22,7 @@ discord <resource> <action> [flags]
 
 - `DISCORD_TOKEN` env var — Bot token from Discord Developer Portal
 - `DISCORD_GUILD_ID` env var — Target server ID
+- Use `--guild <id>` on any command to override the default guild
 
 ## Resources & Commands
 
@@ -78,6 +79,14 @@ discord <resource> <action> [flags]
 | `discord permissions set <channel_id> --role <role_id> [--allow PERM1,PERM2] [--deny PERM1,PERM2]` | Set permission overwrite |
 | `discord permissions remove <channel_id> --role <role_id>` | Remove permission overwrite |
 
+### reactions
+
+| Command | Description |
+|---------|-------------|
+| `discord reactions add <channel_id> <message_id> <emoji>` | Add a reaction to a message |
+| `discord reactions remove <channel_id> <message_id> <emoji>` | Remove the bot's reaction from a message |
+| `discord reactions list <channel_id> <message_id> <emoji> [--limit N]` | List users who reacted with an emoji |
+
 **Permission names:** VIEW_CHANNEL, SEND_MESSAGES, MANAGE_MESSAGES, MANAGE_CHANNELS, MANAGE_ROLES, READ_MESSAGE_HISTORY, ADD_REACTIONS, MENTION_EVERYONE, EMBED_LINKS, ATTACH_FILES, MANAGE_WEBHOOKS, MANAGE_THREADS, ADMINISTRATOR, KICK_MEMBERS, BAN_MEMBERS, CONNECT, SPEAK
 
 ## Channel Types
@@ -109,4 +118,8 @@ discord permissions set 123456789 --role 444555666 --allow VIEW_CHANNEL,SEND_MES
 
 # Send an announcement
 discord messages send 123456789 "🚀 New release v2.0!"
+
+# React to a message
+discord reactions add 123456789 987654321 "👍"
+discord reactions remove 123456789 987654321 "👍"
 ```

@@ -48,6 +48,11 @@ enum Commands {
         #[command(subcommand)]
         action: PermissionAction,
     },
+    /// Manage emoji reactions on messages
+    Reactions {
+        #[command(subcommand)]
+        action: ReactionAction,
+    },
     /// Manage guild info
     Guild {
         #[command(subcommand)]
@@ -177,6 +182,30 @@ enum PermissionAction {
 }
 
 #[derive(Subcommand)]
+enum ReactionAction {
+    /// Add a reaction to a message
+    Add {
+        channel_id: String,
+        message_id: String,
+        emoji: String,
+    },
+    /// Remove the bot's reaction from a message
+    Remove {
+        channel_id: String,
+        message_id: String,
+        emoji: String,
+    },
+    /// List reactions on a message for a given emoji
+    List {
+        channel_id: String,
+        message_id: String,
+        emoji: String,
+        #[arg(long, default_value = "25")]
+        limit: u32,
+    },
+}
+
+#[derive(Subcommand)]
 enum GuildAction {
     /// Show guild info
     Info,
@@ -285,6 +314,21 @@ impl Discord {
             process::exit(1);
         }
     }
+
+    fn put_empty(&self, path: &str) {
+        let url = format!("{}{}", BASE_URL, path);
+        let resp = self.client.put(&url)
+            .header("Authorization", format!("Bot {}", self.token))
+            .header("User-Agent", "DiscordBot (discord-cli, 0.1.0)")
+            .header("Content-Length", "0")
+            .send()
+            .unwrap_or_else(|e| { eprintln!("Request failed: {e}"); process::exit(1); });
+        if !resp.status().is_success() {
+            let body: Value = resp.json().unwrap_or_default();
+            eprintln!("Error: {}", serde_json::to_string_pretty(&body).unwrap());
+            process::exit(1);
+        }
+    }
 }
 
 fn channel_type_id(t: &str) -> u32 {
@@ -301,6 +345,19 @@ fn channel_type_id(t: &str) -> u32 {
 fn parse_color(s: &str) -> u32 {
     let hex = s.trim_start_matches('#');
     u32::from_str_radix(hex, 16).unwrap_or_else(|_| { eprintln!("Invalid color: {s}"); process::exit(1); })
+}
+
+fn encode_emoji(emoji: &str) -> String {
+    // Custom emoji format name:id passes through; unicode emoji gets URL-encoded
+    if emoji.contains(':') {
+        emoji.to_string()
+    } else {
+        let mut buf = String::new();
+        for byte in emoji.as_bytes() {
+            buf.push_str(&format!("%{:02X}", byte));
+        }
+        buf
+    }
 }
 
 fn parse_permissions(s: &str) -> u64 {
@@ -488,6 +545,28 @@ fn main() {
                 let target_id = role.or(member).unwrap_or_else(|| { eprintln!("Specify --role or --member"); process::exit(1); });
                 dc.delete(&format!("/channels/{}/permissions/{}", channel_id, target_id));
                 println!("Removed permission overwrite for {} on channel {}", target_id, channel_id);
+            },
+        },
+        Commands::Reactions { action } => match action {
+            ReactionAction::Add { channel_id, message_id, emoji } => {
+                let encoded = encode_emoji(&emoji);
+                dc.put_empty(&format!("/channels/{}/messages/{}/reactions/{}/@me", channel_id, message_id, encoded));
+                println!("Added reaction {} to message {}", emoji, message_id);
+            },
+            ReactionAction::Remove { channel_id, message_id, emoji } => {
+                let encoded = encode_emoji(&emoji);
+                dc.delete(&format!("/channels/{}/messages/{}/reactions/{}/@me", channel_id, message_id, encoded));
+                println!("Removed reaction {} from message {}", emoji, message_id);
+            },
+            ReactionAction::List { channel_id, message_id, emoji, limit } => {
+                let encoded = encode_emoji(&emoji);
+                let users = dc.get(&format!("/channels/{}/messages/{}/reactions/{}?limit={}", channel_id, message_id, encoded, limit));
+                if let Some(arr) = users.as_array() {
+                    println!("{} reactions with {}:", arr.len(), emoji);
+                    for u in arr {
+                        println!("  {} ({})", u["username"].as_str().unwrap_or("?"), u["id"]);
+                    }
+                }
             },
         },
     }
